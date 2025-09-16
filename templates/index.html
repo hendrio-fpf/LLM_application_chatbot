@@ -1,47 +1,353 @@
 <!DOCTYPE html>
 <html lang="en">
-  <!--general infomraion of the webpage-->
-  <head>
+<head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Chatbot</title>
-    <meta name="author" content="J.C. Chen">
-    <!-- <link rel="stylesheet" href="css/style.css" /> -->
-    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
-    <!-- <link rel="shortcut icon" href='favicon.ico' type="image/x-icon">
-    <link rel="icon" href='favicon.ico' type="image/x-icon"> -->
+    <title>ChatGPT-Style Chatbot</title>
+    <meta name="author" content="J.C. Chen (updated by Gemini)">
+    
     <link rel="shortcut icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
-  </head>
-  <!--end general information-->
-  <body>
 
-    <!-- <header>
-      <div class="color-block"></div>
-    </header> -->
+    <style>
+        :root {
+            --background-color: #212121;
+            --sidebar-color: #000000;
+            --chat-area-bg: #343541;
+            --user-message-bg: #343541;
+            --bot-message-bg: #444654;
+            --input-area-bg: #40414f;
+            --text-color: #ececf1;
+            --border-color: rgba(255, 255, 255, 0.2);
+            --hover-color: #202123;
+        }
 
-    <!--Chatbot container-->
-    <main>  
-      <div class="chatbot">
-        <div class="chat-header">
-          <h1>My LLM</h1>
-        </div>
-        <div class="header-sub-text">
-          <p>Copyright © JC 2023 - Created by JC with <a class="purple">❤</a></p>
-        </div>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-        <div class="spacer" id="messages-container"></div>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* --- Sidebar --- */
+        .sidebar {
+            width: 260px;
+            background-color: var(--sidebar-color);
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+        }
+
+        .new-chat-btn {
+            padding: 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            background-color: transparent;
+            color: var(--text-color);
+            text-align: left;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-bottom: 20px;
+        }
+
+        .new-chat-btn:hover {
+            background-color: var(--hover-color);
+        }
         
-        <form class="chat-form" id="message-form">
-          <textarea type="text" id="message-input" placeholder="Send a message..."></textarea>
-          <button type="submit">➤</button> 
-        </form>
-      </div>
-    </main>
-    <!--end chatbot container-->
+        .chat-history {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
 
-    <!--Javascript to call the language model-->
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-    <!--end Javascript to call the language model-->
-  </body>
+        /* --- Main Chat Area --- */
+        .chat-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background-color: var(--chat-area-bg);
+        }
+
+        /* --- Welcome Screen --- */
+        .welcome-container {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .welcome-container h1 {
+            font-size: 2.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .example-cards {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            padding: 0 20px;
+        }
+
+        .card {
+            background-color: var(--input-area-bg);
+            padding: 15px;
+            border-radius: 8px;
+            width: 200px;
+            cursor: pointer;
+        }
+        
+        .card:hover {
+            background-color: #565869;
+        }
+
+        .card h3 {
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+
+        .card p {
+            font-size: 0.9rem;
+            color: #b0b0b0;
+        }
+
+        /* --- Chat Messages --- */
+        #messages-container {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 20px 10%;
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        .message {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            max-width: 90%;
+            line-height: 1.6;
+        }
+
+        .message.user {
+            background-color: var(--user-message-bg);
+            align-self: flex-start; /* Aligns user message to the start */
+        }
+
+        .message.bot {
+            background-color: var(--bot-message-bg);
+            align-self: flex-start; /* Also aligns bot to start for a cleaner look */
+        }
+        
+        .message .icon {
+            width: 30px;
+            height: 30px;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        
+        .message.user .icon { background-color: #5436da; }
+        .message.bot .icon { background-color: #19c37d; }
+        
+        .message .text { white-space: pre-wrap; }
+
+
+        /* --- Input Form --- */
+        .chat-form-container {
+            padding: 20px 10%;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .chat-form {
+            display: flex;
+            align-items: center;
+            background-color: var(--input-area-bg);
+            border-radius: 8px;
+            padding: 5px 15px;
+            border: 1px solid var(--border-color);
+        }
+
+        .chat-form textarea {
+            flex-grow: 1;
+            background: transparent;
+            border: none;
+            color: var(--text-color);
+            font-size: 1rem;
+            resize: none;
+            max-height: 200px; /* Limit auto-growth */
+            overflow-y: auto;
+            padding: 10px 0;
+        }
+
+        .chat-form textarea:focus {
+            outline: none;
+        }
+
+        .chat-form button {
+            background-color: #19c37d; /* Green accent color */
+            border: none;
+            border-radius: 5px;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            margin-left: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .chat-form button:hover {
+            opacity: 0.8;
+        }
+
+        .chat-form button svg {
+            width: 16px;
+            height: 16px;
+            fill: white;
+        }
+    </style>
+</head>
+<body>
+
+    <aside class="sidebar">
+        <button class="new-chat-btn">+ New Chat</button>
+        <div class="chat-history">
+            </div>
+    </aside>
+
+    <main class="chat-area">
+        <div id="messages-container">
+            <div class="welcome-container" id="welcome-screen">
+                <h1>My LLM</h1>
+                <div class="example-cards">
+                    <div class="card">
+                        <h3>Plan a trip</h3>
+                        <p>to see the Northern Lights in Norway</p>
+                    </div>
+                    <div class="card">
+                        <h3>Explain quantum computing</h3>
+                        <p>in simple terms</p>
+                    </div>
+                    <div class="card">
+                        <h3>Write a thank-you note</h3>
+                        <p>to a guest speaker</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-form-container">
+             <form class="chat-form" id="message-form">
+                <textarea id="message-input" placeholder="Send a message..." required></textarea>
+                <button type="submit">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="size-6">
+                      <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
+                    </svg>
+                </button> 
+            </form>
+            <p style="text-align: center; font-size: 0.75rem; margin-top: 10px; opacity: 0.7;">
+                Copyright © HB 2025 - Created by Hendrio
+            </p>
+        </div>
+    </main>
+
+    <script>
+        const messageForm = document.getElementById('message-form');
+        const messageInput = document.getElementById('message-input');
+        const messagesContainer = document.getElementById('messages-container');
+        const welcomeScreen = document.getElementById('welcome-screen');
+
+        // Function to create and append a message bubble
+        const appendMessage = (sender, text) => {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('message', sender); // 'user' or 'bot'
+            
+            const iconDiv = document.createElement('div');
+            iconDiv.classList.add('icon');
+            iconDiv.textContent = sender === 'user' ? 'U' : 'AI';
+
+            const textDiv = document.createElement('div');
+            textDiv.classList.add('text');
+            textDiv.textContent = text;
+            
+            messageDiv.appendChild(iconDiv);
+            messageDiv.appendChild(textDiv);
+            messagesContainer.appendChild(messageDiv);
+
+            // Scroll to the bottom to see the new message
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        };
+        
+        messageForm.addEventListener('submit', async (e) => {
+            e.preventDefault(); // Prevent default form submission
+            const userMessage = messageInput.value.trim();
+            if (!userMessage) return; // Don't send empty messages
+
+            // Hide welcome screen on first message
+            if (welcomeScreen) {
+                welcomeScreen.style.display = 'none';
+            }
+
+            // Display user's message
+            appendMessage('user', userMessage);
+            messageInput.value = ''; // Clear the input field
+            messageInput.style.height = 'auto'; // Reset textarea height
+
+            // --- THIS IS WHERE YOU MAKE YOUR BACKEND CALL ---
+            // Display a temporary bot message while waiting for response
+            appendMessage('bot', 'Thinking...');
+            
+            try {
+                // Example: Using fetch to call your Flask backend
+                // This is a placeholder. You need to replace it with your actual backend endpoint and logic.
+                const response = await fetch('https://hendriobraga-5000.theianext-0-labs-prod-misc-tools-us-east-0.proxy.cognitiveclass.ai/chatbot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({prompt: userMessage }),
+                });
+
+                if (!response.ok) {
+                   throw new Error('Network response was not ok');
+                }
+
+                const data = await response.json();
+                console.info('response data:', data);
+                const botResponse = data.response; // Assuming your backend returns { "reply": "..." }
+                
+                // Remove the "Thinking..." message and add the real one
+                messagesContainer.lastChild.remove(); 
+                appendMessage('bot', botResponse);
+
+            } catch (error) {
+                console.error('Error fetching bot response:', error);
+                messagesContainer.lastChild.querySelector('.text').textContent = 'Sorry, something went wrong.';
+            }
+            // --- END OF BACKEND CALL SECTION ---
+        });
+        
+        // Auto-resize textarea
+        messageInput.addEventListener('input', function () {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+    </script>
+</body>
 </html>
